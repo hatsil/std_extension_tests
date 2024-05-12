@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.28)
 project(UnitTests CXX)
 
 set(TARGET "unit-tests")
@@ -11,8 +11,11 @@ include_directories(
   include
 )
 
-include(cmake/stdext.cmake)
 include(cmake/gtest.cmake)
+
+add_subdirectory(submodules/std_extention)
+
+add_definitions(-DALL_TESTS)
 
 file(GLOB SOURCES "src/*.cpp")
 
@@ -22,5 +25,5 @@ target_link_libraries(
   ${TARGET} PRIVATE
   gtest
   gtest_main
-  stdext
+  std_extention
 )

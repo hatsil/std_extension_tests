@@ -1,385 +1,71 @@
 #pragma once
 
-#include <stdext/semaphore.hpp>
-#include <gtest/gtest.h>
-#include <thread>
-#include <list>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <gtest/gtest.h>
+#include <list>
 #include <random>
-#include <algorithm>
+#include <std_extention/semaphore.hpp>
+#include <thread>
 
 using namespace std::chrono_literals;
 
 class SemaphoreTestSuite : public ::testing::Test {};
 class BinarySemaphoreTestSuite : public SemaphoreTestSuite {};
 class CountingSemaphoreTestSuite : public SemaphoreTestSuite {};
+class FairBinarySemaphoreTestSuite : public SemaphoreTestSuite {};
+class FairCountingSemaphoreTestSuite : public SemaphoreTestSuite {};
 
-TEST_F(BinarySemaphoreTestSuite, Test1) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        for (int i = 0; i < 10; i++) {
-            sem.release();
-        }
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        sem.release(numOfThreads - 1);
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
+#define COUNTING_SEMAPHORE_TEST_F(testSuite, countSize, testNum, CountingSemaphore)            \
+    TEST_F(testSuite, Test_##countSize##_##testNum) {                                          \
+        for (int n = 0; n < 333; n++) {                                                        \
+            const std::size_t                 numOfThreads = std::max(100uz, 2uz * countSize); \
+            std::list<std::thread>            threads;                                         \
+            ext::CountingSemaphore<countSize> sem1(0);                                         \
+            ext::CountingSemaphore<1>         sem2(0);                                         \
+            std::atomic<std::size_t>          count(0);                                        \
+            std::random_device                rd;                                              \
+            std::mt19937                      gen(rd());                                       \
+            std::uniform_int_distribution<std::size_t> dist1(1);                               \
+                                                                                               \
+            for (std::size_t i = 0; i < std::max<std::size_t>(countSize * 2, 10); i++) {       \
+                sem1.release(dist1(gen));                                                      \
+            }                                                                                  \
+                                                                                               \
+            for (std::size_t i = 0; i < numOfThreads; i++) {                                   \
+                threads.emplace_back([&sem1, &sem2, &count] {                                  \
+                    sem1.acquire();                                                            \
+                    if (countSize == ++count) {                                                \
+                        sem2.release();                                                        \
+                    }                                                                          \
+                });                                                                            \
+            }                                                                                  \
+                                                                                               \
+            sem2.acquire();                                                                    \
+            std::this_thread::sleep_for(10ms);                                                 \
+            ASSERT_EQ(count, countSize);                                                       \
+            std::uniform_int_distribution<std::size_t> dist2(0, numOfThreads - countSize);     \
+            for (std::size_t remainingReleases = numOfThreads - countSize, releases = 0;       \
+                 remainingReleases != 0; remainingReleases -= releases) {                      \
+                releases = std::min(remainingReleases, dist2(gen));                            \
+                threads.emplace_back([&sem1, releases] { sem1.release(releases); });           \
+            }                                                                                  \
+                                                                                               \
+            for (auto &thread : threads) {                                                     \
+                thread.join();                                                                 \
+            }                                                                                  \
+            ASSERT_EQ(count, numOfThreads);                                                    \
+        }                                                                                      \
     }
-}
 
-TEST_F(BinarySemaphoreTestSuite, Test2) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        for (int i = 0; i < 10; i++) {
-            sem.release();
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        for (int i = 1; i < numOfThreads; i++) {
-            threads.emplace_back([&sem] {
-                sem.release();
-            });
-        }
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
-
-
-TEST_F(BinarySemaphoreTestSuite, Test3) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        for (int i = 0; i < 10; i++) {
-            sem.release();
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        for (int i = 2; i < numOfThreads; i += 2) {
-            threads.emplace_back([&sem] {
-                sem.release(2);
-            });
-        }
-        sem.release();
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
-
-TEST_F(BinarySemaphoreTestSuite, Test4) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        for (int i = 0; i < 10; i++) {
-            sem.release();
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        for (int i = 4; i < numOfThreads; i += 4) {
-            threads.emplace_back([&sem] {
-                sem.release(4);
-            });
-        }
-        sem.release(3);
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
-
-TEST_F(BinarySemaphoreTestSuite, Test5) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        std::random_device rd;  // a seed source for the random number engine
-        std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        for (int i = 0; i < 10; i++) {
-            sem.release();
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        std::uniform_int_distribution<> distrib1(0, numOfThreads - 1);
-        for (int remainingReleases = numOfThreads - 1, releases = 0; remainingReleases > 0; remainingReleases -= releases) {
-            releases = std::min(remainingReleases, distrib1(gen));
-            threads.emplace_back([&sem, releases] {
-                sem.release(releases);
-            });
-        }
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
-
-TEST_F(BinarySemaphoreTestSuite, Test6) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        std::random_device rd;  // a seed source for the random number engine
-        std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-        std::uniform_int_distribution<> distrib(1);
-
-        for (int i = 0; i < 10; i++) {
-            sem.release(distrib(gen));
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        sem.release(numOfThreads - 1);
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
-
-TEST_F(BinarySemaphoreTestSuite, Test7) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        std::random_device rd;  // a seed source for the random number engine
-        std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-        std::uniform_int_distribution<> distrib(1);
-
-        for (int i = 0; i < 10; i++) {
-            sem.release(distrib(gen));
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        for (int i = 1; i < numOfThreads; i++) {
-            threads.emplace_back([&sem] {
-                sem.release();
-            });
-        }
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
-
-TEST_F(BinarySemaphoreTestSuite, Test8) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        std::random_device rd;  // a seed source for the random number engine
-        std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-        std::uniform_int_distribution<> distrib(1);
-
-        for (int i = 0; i < 10; i++) {
-            sem.release(distrib(gen));
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        for (int i = 2; i < numOfThreads; i += 2) {
-            threads.emplace_back([&sem] {
-                sem.release(2);
-            });
-        }
-        sem.release();
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
-
-TEST_F(BinarySemaphoreTestSuite, Test9) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        std::random_device rd;  // a seed source for the random number engine
-        std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-        std::uniform_int_distribution<> distrib(1);
-
-        for (int i = 0; i < 10; i++) {
-            sem.release(distrib(gen));
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        for (int i = 4; i < numOfThreads; i += 4) {
-            threads.emplace_back([&sem] {
-                sem.release(4);
-            });
-        }
-        sem.release(3);
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
-
-TEST_F(BinarySemaphoreTestSuite, Test10) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::binary_semaphore sem(0);
-        std::atomic_int count(0);
-        std::random_device rd;  // a seed source for the random number engine
-        std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-        std::uniform_int_distribution<> distrib(1);
-
-        for (int i = 0; i < 10; i++) {
-            sem.release(distrib(gen));
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 1);
-        std::uniform_int_distribution<> distrib1(0, numOfThreads - 1);
-        for (int remainingReleases = numOfThreads - 1, releases = 0; remainingReleases > 0; remainingReleases -= releases) {
-            releases = std::min(remainingReleases, distrib1(gen));
-            threads.emplace_back([&sem, releases] {
-                sem.release(releases);
-            });
-        }
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
-
-TEST_F(CountingSemaphoreTestSuite, Test1) {
-    for (int n = 0; n < 20; n++) {
-        std::list<std::thread> threads;
-        stdext::counting_semaphore<5> sem(0);
-        std::atomic_int count(0);
-        std::random_device rd;  // a seed source for the random number engine
-        std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-        std::uniform_int_distribution<> distrib(1);
-
-        for (int i = 0; i < 10; i++) {
-            sem.release(distrib(gen));
-        }
-
-        const int numOfThreads = 100;
-        for (int i = 0; i < numOfThreads; i++) {
-            threads.emplace_back([&sem, &count] {
-                sem.acquire();
-                ++count;
-            });
-        }
-
-        std::this_thread::sleep_for(250ms);
-        ASSERT_EQ(count, 5);
-        std::uniform_int_distribution<> distrib1(0, numOfThreads - 1);
-        for (int remainingReleases = numOfThreads - 1, releases = 0; remainingReleases > 0; remainingReleases -= releases) {
-            releases = std::min(remainingReleases, distrib1(gen));
-            threads.emplace_back([&sem, releases] {
-                sem.release(releases);
-            });
-        }
-        for (auto &thread : threads) {
-            thread.join();
-        }
-        ASSERT_EQ(count, numOfThreads);
-    }
-}
+COUNTING_SEMAPHORE_TEST_F(BinarySemaphoreTestSuite, 1, 1, counting_semaphore)
+COUNTING_SEMAPHORE_TEST_F(CountingSemaphoreTestSuite, 5, 1, counting_semaphore)
+COUNTING_SEMAPHORE_TEST_F(CountingSemaphoreTestSuite, 10, 1, counting_semaphore)
+COUNTING_SEMAPHORE_TEST_F(CountingSemaphoreTestSuite, 50, 1, counting_semaphore)
+COUNTING_SEMAPHORE_TEST_F(CountingSemaphoreTestSuite, 100, 1, counting_semaphore)
+COUNTING_SEMAPHORE_TEST_F(FairBinarySemaphoreTestSuite, 1, 1, fair_counting_semaphore)
+COUNTING_SEMAPHORE_TEST_F(FairCountingSemaphoreTestSuite, 5, 1, fair_counting_semaphore)
+COUNTING_SEMAPHORE_TEST_F(FairCountingSemaphoreTestSuite, 10, 1, fair_counting_semaphore)
+COUNTING_SEMAPHORE_TEST_F(FairCountingSemaphoreTestSuite, 50, 1, fair_counting_semaphore)
+COUNTING_SEMAPHORE_TEST_F(FairCountingSemaphoreTestSuite, 100, 1, fair_counting_semaphore)
