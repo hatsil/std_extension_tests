@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include <list>
 #include <random>
-#include <std_extention/semaphore.hpp>
+#include <std_extension/semaphore.hpp>
 #include <thread>
 
 using namespace std::chrono_literals;

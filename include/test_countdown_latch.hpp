@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include <list>
 #include <random>
-#include <std_extention/countdown_latch.hpp>
+#include <std_extension/countdown_latch.hpp>
 #include <thread>
 #include <vector>
 

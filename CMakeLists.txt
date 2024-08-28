@@ -13,7 +13,7 @@ include_directories(
 
 include(cmake/gtest.cmake)
 
-add_subdirectory(submodules/std_extention)
+add_subdirectory(submodules/std_extension)
 
 add_definitions(-DALL_TESTS)
 
@@ -25,5 +25,5 @@ target_link_libraries(
   ${TARGET} PRIVATE
   gtest
   gtest_main
-  std_extention
+  std_extension
 )

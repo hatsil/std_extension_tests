@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 #include <iostream>
-#include <std_extention/exception.hpp>
+#include <std_extension/exception.hpp>
 
 int fib(int n) {
     if (0 == n || 1 == n) {
